@@ -1,8 +1,9 @@
 use alloy_sol_types::sol;
 use primitive_types::U256;
+use serde::{Deserialize, Serialize};
 
 /// Represents a time series with timestamps and corresponding values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TimeSeries {
     pub timestamps: Vec<u64>,
     pub values: Vec<f64>,

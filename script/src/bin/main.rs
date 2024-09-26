@@ -14,6 +14,7 @@ use alloy_sol_types::SolType;
 use clap::Parser;
 use sp1_sdk::{ProverClient, SP1Stdin};
 use timeseries_lib::PublicValuesStruct;
+use tracing::log::{error, info};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
 pub const TIMESERIES_ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
@@ -27,9 +28,6 @@ struct Args {
 
     #[clap(long)]
     prove: bool,
-
-    #[clap(long, default_value = "5")]
-    n: u32,
 }
 
 fn main() {
@@ -49,44 +47,47 @@ fn main() {
 
     // Setup the inputs.
     let mut stdin = SP1Stdin::new();
-    stdin.write(&args.n);
-
     // Generate some sample data
-    let timestamps: Vec<u64> = (0..args.n).map(|i| i as u64 * 86400).collect();
-    let forecast_values: Vec<f64> = (0..args.n).map(|i| i as f64 * 1.5).collect();
+    let timestamps: Vec<u64> = (0..5).map(|i| i as u64 * 86400).collect();
+    let forecast_values: Vec<f64> = (0..5).map(|i| i as f64 * 1.5).collect();
 
-    // Write the sample data to stdin
-    stdin.write(&args.n);
-    for &t in &timestamps {
-        stdin.write(&t);
-    }
-    for &v in &forecast_values {
-        stdin.write(&v);
-    }
+    stdin.write(&timestamps);
+    stdin.write(&forecast_values);
 
-    println!("n: {}", args.n);
+    info!("Timestamps: {:?}", timestamps);
+    info!("Forecast values: {:?}", forecast_values);
 
     if args.execute {
         // Execute the program
-        let (output, report) = client.execute(TIMESERIES_ELF, stdin).run().unwrap();
-        println!("Program executed successfully.");
+        info!("Executing the program...");
+        match client.execute(TIMESERIES_ELF, stdin).run() {
+            Ok((output, report)) => {
+                info!("Program executed successfully.");
 
-        // Read the output.
-        let decoded = PublicValuesStruct::abi_decode(output.as_slice(), true).unwrap();
-        let PublicValuesStruct {
-            timestamps,
-            forecast_values,
-            mean,
-            std_dev,
-        } = decoded;
+                // Read the output.
+                match PublicValuesStruct::abi_decode(output.as_slice(), true) {
+                    Ok(decoded) => {
+                        let PublicValuesStruct {
+                            timestamps,
+                            forecast_values,
+                            mean,
+                            std_dev,
+                        } = decoded;
 
-        println!("Timestamps: {:?}", timestamps);
-        println!("Forecast values: {:?}", forecast_values);
-        println!("Mean: {}", mean);
-        println!("Standard Deviation: {}", std_dev);
+                        info!("Decoded output:");
+                        info!("Timestamps: {:?}", timestamps);
+                        info!("Forecast values: {:?}", forecast_values);
+                        info!("Mean: {}", mean);
+                        info!("Standard Deviation: {}", std_dev);
 
-        // Record the number of cycles executed.
-        println!("Number of cycles: {}", report.total_instruction_count());
+                        // Record the number of cycles executed.
+                        info!("Number of cycles: {}", report.total_instruction_count());
+                    }
+                    Err(e) => error!("Failed to decode output: {:?}", e),
+                }
+            }
+            Err(e) => error!("Execution failed: {:?}", e),
+        }
     } else {
         // Setup the program for proving.
         let (pk, vk) = client.setup(TIMESERIES_ELF);

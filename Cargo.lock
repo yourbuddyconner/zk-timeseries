@@ -5366,6 +5366,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-sol-types",
  "primitive-types",
+ "serde",
 ]
 
 [[package]]

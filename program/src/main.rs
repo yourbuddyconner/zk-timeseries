@@ -24,17 +24,9 @@ use timeseries_lib::{f64_to_u256, PublicValuesStruct, TimeSeries}; // Add this i
 /// 4. Encodes the public values for verification in a smart contract.
 /// 5. Commits the encoded data as public output of the ZK proof.
 pub fn main() {
-    // Read the number of data points from the prover
-    let n = sp1_zkvm::io::read::<u32>();
-
     // Read the timestamps and forecast values from the prover
-    let mut timestamps = Vec::with_capacity(n as usize);
-    let mut forecast_values = Vec::with_capacity(n as usize);
-
-    for _ in 0..n {
-        timestamps.push(sp1_zkvm::io::read::<u64>());
-        forecast_values.push(sp1_zkvm::io::read::<f64>());
-    }
+    let timestamps = sp1_zkvm::io::read::<Vec<u64>>();
+    let forecast_values = sp1_zkvm::io::read::<Vec<f64>>();
 
     // Create a TimeSeries instance for statistical analysis
     let time_series = TimeSeries::new(timestamps.clone(), forecast_values.clone());
