@@ -1,0 +1,10 @@
+[package]
+version = "0.1.0"
+name = "zk-timeseries-program"
+edition = "2021"
+
+[dependencies]
+alloy-sol-types = { workspace = true }
+sp1-zkvm = "2.0.0"
+timeseries-lib = { path = "../lib" }
+ruint = "1.7.0"
