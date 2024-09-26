@@ -1,7 +1,23 @@
-# SP1 Project Template
+# SP1 Time Series Analysis and Forecasting Project
 
-This is a template for creating an end-to-end [SP1](https://github.com/succinctlabs/sp1) project
-that can generate a proof of any RISC-V program.
+This project demonstrates how to use [SP1](https://github.com/succinctlabs/sp1) to perform time series analysis and forecasting within a zero-knowledge proof system. It showcases the ability to process time series data, calculate statistical measures, and generate forecasts, all while maintaining privacy and verifiability.
+
+## What Does This Project Do?
+
+This project implements a time series analysis and forecasting system using SP1, which allows for:
+
+1. Processing time series data (timestamps and corresponding values)
+2. Calculating statistical measures such as mean, median, and standard deviation
+3. Computing moving averages and exponential moving averages
+4. Performing simple exponential smoothing for forecasting
+5. Generating zero-knowledge proofs of these computations
+
+## Why is it Useful?
+
+1. **Privacy-Preserving Analytics**: Perform time series analysis without revealing the underlying data.
+2. **Verifiable Forecasts**: Generate forecasts that can be verified without exposing the model or historical data.
+3. **On-Chain Analytics**: Enable complex time series computations that can be verified on-chain, opening up possibilities for DeFi applications, prediction markets, and more.
+4. **Data Integrity**: Ensure the integrity of time series data and computations through zero-knowledge proofs.
 
 ## Requirements
 
@@ -10,11 +26,9 @@ that can generate a proof of any RISC-V program.
 
 ## Running the Project
 
-There are four main ways to run this project: build a program, execute a program, generate a core proof, and
-generate an EVM-compatible proof.
-
 ### Build the Program
 
+To build the program, run:
 To build the program, run the following command:
 
 ```sh
@@ -73,7 +87,8 @@ cargo prove vkey --elf elf/riscv32im-succinct-zkvm-elf
 
 ## Using the Prover Network
 
-We highly recommend using the Succinct prover network for any non-trivial programs or benchmarking purposes. For more information, see the [setup guide](https://docs.succinct.xyz/generating-proofs/prover-network.html).
+We highly recommend using the Succinct prover network for any non-trivial programs or benchmarking purposes. For more 
+information, see the [setup guide](https://docs.succinct.xyz/generating-proofs/prover-network.html).
 
 To get started, copy the example environment file:
 
