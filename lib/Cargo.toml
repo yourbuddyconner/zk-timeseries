@@ -1,9 +1,0 @@
-[package]
-name = "timeseries-lib"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-alloy-sol-types = { workspace = true }
-primitive-types = "0.12.1"
-serde = "1.0.182"

@@ -13,11 +13,11 @@
 use alloy_sol_types::SolType;
 use clap::Parser;
 use sp1_sdk::{ProverClient, SP1Stdin};
-use timeseries_lib::PublicValuesStruct;
 use tracing::log::{error, info};
 
-/// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
-pub const TIMESERIES_ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
+/// The ELF file for the Succinct RISC-V zkVM data hash program.
+pub const DATA_HASH_ELF: &[u8] =
+    include_bytes!("../../../../elf/riscv32im-succinct-zkvm-data-hash-elf");
 
 /// The arguments for the command.
 #[derive(Parser, Debug)]
@@ -60,37 +60,41 @@ fn main() {
     if args.execute {
         // Execute the program
         info!("Executing the program...");
-        match client.execute(TIMESERIES_ELF, stdin).run() {
+        match client.execute(DATA_HASH_ELF, stdin).run() {
             Ok((output, report)) => {
                 info!("Program executed successfully.");
 
                 // Read the output.
-                match PublicValuesStruct::abi_decode(output.as_slice(), true) {
+                match lib_timeseries::PublicValuesStruct::abi_decode(output.as_slice(), true) {
                     Ok(decoded) => {
-                        let PublicValuesStruct {
-                            timestamps,
-                            forecast_values,
+                        let lib_timeseries::PublicValuesStruct {
+                            start_timestamp,
+                            end_timestamp,
+                            values_hash,
                             mean,
+                            median,
                             std_dev,
                         } = decoded;
 
                         info!("Decoded output:");
-                        info!("Timestamps: {:?}", timestamps);
-                        info!("Forecast values: {:?}", forecast_values);
+                        info!("Start timestamp: {}", start_timestamp);
+                        info!("End timestamp: {}", end_timestamp);
+                        info!("Values hash: {}", values_hash);
                         info!("Mean: {}", mean);
+                        info!("Median: {}", median);
                         info!("Standard Deviation: {}", std_dev);
-
-                        // Record the number of cycles executed.
-                        info!("Number of cycles: {}", report.total_instruction_count());
                     }
                     Err(e) => error!("Failed to decode output: {:?}", e),
                 }
+
+                // Record the number of cycles executed.
+                info!("Number of cycles: {}", report.total_instruction_count());
             }
             Err(e) => error!("Execution failed: {:?}", e),
         }
     } else {
         // Setup the program for proving.
-        let (pk, vk) = client.setup(TIMESERIES_ELF);
+        let (pk, vk) = client.setup(DATA_HASH_ELF);
 
         // Generate the proof
         let proof = client

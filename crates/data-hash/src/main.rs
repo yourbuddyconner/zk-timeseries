@@ -12,8 +12,7 @@
 sp1_zkvm::entrypoint!(main);
 
 use alloy_sol_types::SolValue;
-use ruint::Uint;
-use timeseries_lib::{f64_to_u256, PublicValuesStruct, TimeSeries}; // Add this import
+use lib_timeseries::TimeSeries;
 
 /// The main entry point for the SP1 program.
 ///
@@ -29,35 +28,14 @@ pub fn main() {
     let forecast_values = sp1_zkvm::io::read::<Vec<f64>>();
 
     // Create a TimeSeries instance for statistical analysis
-    let time_series = TimeSeries::new(timestamps.clone(), forecast_values.clone());
+    let time_series = TimeSeries::new(timestamps, forecast_values);
 
-    // Calculate mean and standard deviation of the forecast values
-    let mean = time_series.mean();
-    let std_dev = time_series.std_dev();
-
-    // Convert f64 values to Uint<256, 4> for Solidity compatibility
-    // This step is necessary because Solidity doesn't support floating-point numbers
-    let forecast_values_uint: Vec<Uint<256, 4>> = forecast_values
-        .iter()
-        .map(|&v| Uint::from_str_radix(&f64_to_u256(v).to_string(), 10).unwrap())
-        .collect();
-    let mean_uint = Uint::from_str_radix(&f64_to_u256(mean).to_string(), 10).unwrap();
-    let std_dev_uint = Uint::from_str_radix(&f64_to_u256(std_dev).to_string(), 10).unwrap();
-
-    // Create a PublicValuesStruct with the calculated values
-    // This struct mirrors a Solidity struct that will be used for verification
-    let public_values = PublicValuesStruct {
-        timestamps,
-        forecast_values: forecast_values_uint,
-        mean: mean_uint,
-        std_dev: std_dev_uint,
-    };
+    // Generate the public values struct
+    let public_values = time_series.to_public_values();
 
     // Encode the public values using ABI encoding
-    // This creates a byte representation that can be decoded in Solidity
     let bytes = public_values.abi_encode();
 
     // Commit the encoded public values as output of the ZK proof
-    // These values will be available for verification in the smart contract
     sp1_zkvm::io::commit_slice(&bytes);
 }

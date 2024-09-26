@@ -1,8 +1,9 @@
 [workspace]
 members = [
-    "lib",
-    "program",
-    "script",
+    "crates/lib-timeseries",
+    "crates/data-hash",
+    "crates/moving-average",
+    "crates/script",
 ]
 resolver = "2"
 

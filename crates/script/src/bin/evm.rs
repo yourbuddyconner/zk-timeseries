@@ -12,13 +12,16 @@
 
 use alloy_sol_types::SolType;
 use clap::{Parser, ValueEnum};
+use lib_timeseries::{MovingAveragePublicValuesStruct, PublicValuesStruct};
 use serde::{Deserialize, Serialize};
 use sp1_sdk::{HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey};
 use std::path::PathBuf;
-use timeseries_lib::PublicValuesStruct;
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
-pub const TIMESERIES_ELF: &[u8] = include_bytes!("../../../elf/riscv32im-succinct-zkvm-elf");
+pub const TIMESERIES_ELF: &[u8] =
+    include_bytes!("../../../../elf/riscv32im-succinct-zkvm-data-hash-elf");
+pub const MOVING_AVERAGE_ELF: &[u8] =
+    include_bytes!("../../../../elf/riscv32im-succinct-zkvm-moving-average-elf");
 
 /// The arguments for the EVM command.
 #[derive(Parser, Debug)]
@@ -28,6 +31,10 @@ struct EVMArgs {
     n: u32,
     #[clap(long, value_enum, default_value = "groth16")]
     system: ProofSystem,
+    #[clap(long)]
+    moving_average: bool,
+    #[clap(long, default_value = "3")]
+    window_size: usize,
 }
 
 /// Enum representing the available proof systems
@@ -41,10 +48,14 @@ enum ProofSystem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SP1TimeSeriesProofFixture {
-    timestamps: Vec<u64>,
-    forecast_values: Vec<String>,
-    mean: String,
-    std_dev: String,
+    start_timestamp: String,
+    end_timestamp: String,
+    values_hash: String,
+    window_size: Option<String>,
+    moving_averages: Option<Vec<String>>,
+    mean: Option<String>,
+    median: Option<String>,
+    std_dev: Option<String>,
     vkey: String,
     public_values: String,
     proof: String,
@@ -61,7 +72,12 @@ fn main() {
     let client = ProverClient::new();
 
     // Setup the program.
-    let (pk, vk) = client.setup(TIMESERIES_ELF);
+    let elf = if args.moving_average {
+        MOVING_AVERAGE_ELF
+    } else {
+        TIMESERIES_ELF
+    };
+    let (pk, vk) = client.setup(elf);
 
     // Setup the inputs.
     let mut stdin = SP1Stdin::new();
@@ -71,12 +87,10 @@ fn main() {
     let forecast_values: Vec<f64> = (0..args.n).map(|i| i as f64 * 1.5).collect();
 
     // Write the sample data to stdin
-    stdin.write(&args.n);
-    for &t in &timestamps {
-        stdin.write(&t);
-    }
-    for &v in &forecast_values {
-        stdin.write(&v);
+    stdin.write(&timestamps);
+    stdin.write(&forecast_values);
+    if args.moving_average {
+        stdin.write(&args.window_size);
     }
 
     println!("n: {}", args.n);
@@ -89,7 +103,7 @@ fn main() {
     }
     .expect("failed to generate proof");
 
-    create_proof_fixture(&proof, &vk, args.system);
+    create_proof_fixture(&proof, &vk, args.system, args.moving_average);
 }
 
 /// Create a fixture for the given proof.
@@ -97,25 +111,56 @@ fn create_proof_fixture(
     proof: &SP1ProofWithPublicValues,
     vk: &SP1VerifyingKey,
     system: ProofSystem,
+    is_moving_average: bool,
 ) {
-    // Deserialize the public values.
     let bytes = proof.public_values.as_slice();
-    let PublicValuesStruct {
-        timestamps,
-        forecast_values,
-        mean,
-        std_dev,
-    } = PublicValuesStruct::abi_decode(bytes, false).unwrap();
+    let fixture = if is_moving_average {
+        let MovingAveragePublicValuesStruct {
+            start_timestamp,
+            end_timestamp,
+            values_hash,
+            window_size,
+            moving_averages,
+        } = MovingAveragePublicValuesStruct::abi_decode(bytes, false).unwrap();
 
-    // Create the testing fixture so we can test things end-to-end.
-    let fixture = SP1TimeSeriesProofFixture {
-        timestamps,
-        forecast_values: forecast_values.iter().map(|v| v.to_string()).collect(),
-        mean: mean.to_string(),
-        std_dev: std_dev.to_string(),
-        vkey: vk.bytes32().to_string(),
-        public_values: format!("0x{}", hex::encode(bytes)),
-        proof: format!("0x{}", hex::encode(proof.bytes())),
+        SP1TimeSeriesProofFixture {
+            start_timestamp: start_timestamp.to_string(),
+            end_timestamp: end_timestamp.to_string(),
+            values_hash: values_hash.to_string(),
+            window_size: Some(window_size.to_string()),
+            moving_averages: Some(moving_averages.iter().map(|v| v.to_string()).collect()),
+            mean: None,
+            median: None,
+            std_dev: None,
+            vkey: vk.bytes32().to_string(),
+            public_values: format!("0x{}", hex::encode(bytes)),
+            proof: format!("0x{}", hex::encode(proof.bytes())),
+        }
+    } else {
+        // Deserialize the public values.
+        let PublicValuesStruct {
+            start_timestamp,
+            end_timestamp,
+            values_hash,
+            mean,
+            median,
+            std_dev,
+        } = PublicValuesStruct::abi_decode(bytes, false).unwrap();
+
+        // Create the testing fixture so we can test things end-to-end.
+        SP1TimeSeriesProofFixture {
+            start_timestamp: start_timestamp.to_string(),
+            end_timestamp: end_timestamp.to_string(),
+            values_hash: values_hash.to_string(),
+            mean: Some(mean.to_string()),
+            median: Some(median.to_string()),
+            std_dev: Some(std_dev.to_string()),
+            window_size: None,
+            moving_averages: None,
+            vkey: vk.bytes32().to_string(),
+            public_values: format!("0x{}", hex::encode(bytes)),
+            proof: format!("0x{}", hex::encode(proof.bytes())),
+        }
     };
 
     // The verification key is used to verify that the proof corresponds to the execution of the

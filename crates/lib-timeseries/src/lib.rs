@@ -1,6 +1,6 @@
 use alloy_sol_types::sol;
-use primitive_types::U256;
 use serde::{Deserialize, Serialize};
+use sha3::{Digest, Keccak256};
 
 /// Represents a time series with timestamps and corresponding values.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -125,15 +125,74 @@ impl TimeSeries {
         }
         TimeSeries::new(timestamps, forecast)
     }
+
+    pub fn to_public_values(&self) -> PublicValuesStruct {
+        let start_timestamp = *self.timestamps.first().unwrap_or(&0);
+        let end_timestamp = *self.timestamps.last().unwrap_or(&0);
+        let values_hash = self.compute_hash();
+        let mean = self.mean();
+        let median = self.median();
+        let std_dev = self.std_dev();
+
+        PublicValuesStruct {
+            start_timestamp: alloy_sol_types::private::Uint::<256, 4>::from(start_timestamp),
+            end_timestamp: alloy_sol_types::private::Uint::<256, 4>::from(end_timestamp),
+            values_hash: alloy_sol_types::private::Uint::<256, 4>::from_be_bytes(values_hash),
+            mean: f64_to_u256(mean),
+            median: f64_to_u256(median),
+            std_dev: f64_to_u256(std_dev),
+        }
+    }
+
+    fn compute_hash(&self) -> [u8; 32] {
+        let mut hasher = Keccak256::new();
+        for (timestamp, value) in self.timestamps.iter().zip(self.values.iter()) {
+            hasher.update(timestamp.to_be_bytes());
+            hasher.update(value.to_be_bytes());
+        }
+        hasher.finalize().into()
+    }
+
+    pub fn to_moving_average_public_values(
+        &self,
+        window_size: usize,
+    ) -> MovingAveragePublicValuesStruct {
+        let start_timestamp = *self.timestamps.first().unwrap_or(&0);
+        let end_timestamp = *self.timestamps.last().unwrap_or(&0);
+        let values_hash = self.compute_hash();
+        let ma = self.moving_average(window_size);
+
+        MovingAveragePublicValuesStruct {
+            start_timestamp: alloy_sol_types::private::Uint::<256, 4>::from(start_timestamp),
+            end_timestamp: alloy_sol_types::private::Uint::<256, 4>::from(end_timestamp),
+            values_hash: alloy_sol_types::private::Uint::<256, 4>::from_be_bytes(values_hash),
+            window_size: alloy_sol_types::private::Uint::<256, 4>::from(window_size),
+            moving_averages: vec_f64_to_u256(&ma.values),
+        }
+    }
 }
 
 sol! {
     /// Defines the structure for public values output by the ZK proof.
     struct PublicValuesStruct {
-        uint64[] timestamps;
-        uint256[] forecast_values;
+        uint256 start_timestamp;
+        uint256 end_timestamp;
+        uint256 values_hash;
         uint256 mean;
+        uint256 median;
         uint256 std_dev;
+    }
+}
+
+// Add this new struct after the existing PublicValuesStruct
+sol! {
+    /// Defines the structure for public values output by the moving average ZK proof.
+    struct MovingAveragePublicValuesStruct {
+        uint256 start_timestamp;
+        uint256 end_timestamp;
+        uint256 values_hash;
+        uint256 window_size;
+        uint256[] moving_averages;
     }
 }
 
@@ -141,24 +200,30 @@ sol! {
 ///
 /// This function multiplies the f64 by 1e18 and converts it to a U256.
 /// This allows for 18 decimal places of precision in Solidity.
-pub fn f64_to_u256(value: f64) -> U256 {
-    U256::from_dec_str(&format!("{:.0}", value.abs() * 1e18)).unwrap()
+pub fn f64_to_u256(value: f64) -> alloy_sol_types::private::Uint<256, 4> {
+    let scaled_value = (value.abs() * 1e18) as u128;
+    let bytes = scaled_value.to_be_bytes();
+    let mut padded_bytes = [0u8; 32];
+    padded_bytes[16..].copy_from_slice(&bytes);
+    alloy_sol_types::private::Uint::<256, 4>::from_be_bytes(padded_bytes)
 }
 
 /// Converts a Vec<f64> to a Vec<U256> for Solidity compatibility.
-pub fn vec_f64_to_u256(values: &[f64]) -> Vec<U256> {
+pub fn vec_f64_to_u256(values: &[f64]) -> Vec<alloy_sol_types::private::Uint<256, 4>> {
     values.iter().map(|&v| f64_to_u256(v)).collect()
 }
 
 /// Converts a U256 back to an f64.
 ///
 /// This function is the inverse of f64_to_u256.
-pub fn u256_to_f64(value: U256) -> f64 {
-    value.to_string().parse::<f64>().unwrap() / 1e18
+pub fn u256_to_f64(value: alloy_sol_types::private::Uint<256, 4>) -> f64 {
+    let bytes: [u8; 32] = value.to_be_bytes();
+    let u128_value = u128::from_be_bytes(bytes[16..].try_into().unwrap());
+    (u128_value as f64) / 1e18
 }
 
 /// Converts a Vec<U256> back to a Vec<f64>.
-pub fn vec_u256_to_f64(values: &[U256]) -> Vec<f64> {
+pub fn vec_u256_to_f64(values: &[alloy_sol_types::private::Uint<256, 4>]) -> Vec<f64> {
     values.iter().map(|&v| u256_to_f64(v)).collect()
 }
 

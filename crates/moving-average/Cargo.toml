@@ -1,0 +1,10 @@
+[package]
+version = "0.1.0"
+name = "zk-moving-average"
+edition = "2021"
+
+[dependencies]
+alloy-sol-types = { workspace = true }
+sp1-zkvm = "2.0.0"
+lib-timeseries = { path = "../lib-timeseries" }
+ruint = "1.7.0"
